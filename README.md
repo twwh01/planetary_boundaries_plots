@@ -11,6 +11,7 @@ The code comprises:
 - planetary_boundary_classes.py which defines the classes
 - pbs_2023.py which plots the 2023 planetary boundaries
 - pbs_2025.py which plots the 2025 planetary boundaries
+- pbs_PTME.py which plots the biosphere integrity boundary for the Permo-Triassic Mass Extinction
 
 The planetary_boundary_classes.py script defines three classes:
 1. ControlVariables:	to define the limits and impact of each control variable. 

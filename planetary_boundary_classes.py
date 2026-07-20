@@ -24,15 +24,15 @@ class ControlVariable:
             
     # this section calculates control variable values normalised for their 
     # respective baseline, boundary, and upper limit values as follows:
-    #   a value of 0 = baseline value
-    #   a value of 1 = planetary boundary
-    #   a value of 2 = upper limit of zone of increasing risk
+    #   0 = baseline value
+    #   1 = planetary boundary (edge of safe operating space)
+    #   2 = upper limit of zone of increasing risk
     #   in the high-risk zone normalized values start at 2 and rise
     #       proportional to the width of the zone of increasing risk, i.e.
     #       for the functional diversity value: 
     #       boundary = 0.1, upper limit = 0.2, current value = 0.3
     #       the upper limit has been exceeded by 100% of the width of the zone
-    #       of increasing risk so the normalized value is 2 + 1.0 = 3
+    #       of increasing risk so the normalized value is 2 + 1.00 = 3
     def __normal(self, current_value: float, baseline_value: float, boundary_value: float, upper_value: float) -> float:
         if current_value == None:
             return None
@@ -64,15 +64,6 @@ class ControlVariable:
     
     def norm(self) -> float:
         return self.__normal(self.current_value, self.baseline_value, self.boundary_value, self.upper_value)
-
-    # def norm_max(self) -> float:
-    #     return self.__normal(self.max, self.boundary_value, self.upper_value)
-    
-    # def norm_min(self) -> float:
-    #     return self.__normal(self.min, self.boundary_value, self.upper_value)
-        
-    # def norm_upper_risk(self) -> float:
-    #     return self.__init__(self.boundary_value, self.upper_value)
 
 
 class PlanetaryBoundary:
@@ -125,11 +116,16 @@ class PlanetarySystem:
         import math as m
         import re
 
-        # colour gradient function
-        def gradient_color(start_color, end_color, steps):
-            start_color = np.array(mcolors.to_rgba(start_color))
-            end_color = np.array(mcolors.to_rgba(end_color))
+        # a colour gradient function is used to create smooth transitions between colours
+        # and to set the alpha (transparency) of each segment
+        def gradient_color(start_color, end_color, steps, alpha=1.0):
+            start_color = np.array(mcolors.to_rgba(start_color, alpha))
+            end_color = np.array(mcolors.to_rgba(end_color, alpha))
             return [start_color * (1 - i / steps) + end_color * (i / steps) for i in range(steps)]
+
+        # set the alpha value for each filled segment
+        # # note that missing data are filled by solid grey with alpha=1
+        seg_alpha = 0.75
 
         ax = plt.subplot(projection='polar')
 
@@ -141,8 +137,19 @@ class PlanetarySystem:
         theta = np.linspace(0, 2 * np.pi, n_pb, endpoint=False)
         n = 0
         t_manip = []
+
+        # pre-compute the tallest bar across all quantified control variables so
+        # the radial limit and the control-variable label ring can be sized from
+        # the data before anything is drawn.
         H = 0
-        
+        for pb in pbs:
+            for l in pb.limits:
+                h = l.norm()
+                if h is not None and not m.isnan(h):
+                    H = max(H, h)
+        # ring (radius) for the italic control-variable labels
+        r_labels = max(H, 2) + 0.8
+
         for pb in pbs:
             nb_cat = pb.size # number of planetary boundary control variables
             w = width / nb_cat # width of each control variable in the plot
@@ -162,46 +169,53 @@ class PlanetarySystem:
                 print(limit_name)
                 height = l.norm()
                 
-                # moved from inside if statement
                 none = 1
-                num_segments = 10000
-                segment_height = height / num_segments
                 t = t_list[rk]
                 rk+=1
-                
+
                 # if height != None:
                 if not m.isnan(height):
-                    colors = []
+                    # safe operating space plotted as a solid green bar from 0 -> 1
+                    # antialiased=False removes edge banding
+                    ax.bar(t, min(height, 1), width=w,
+                           facecolor=mcolors.to_rgba('green', seg_alpha),
+                           edgecolor='none', antialiased=False, bottom=0)
 
-                    for i in range(num_segments):
-                        # set segment radius
-                        current_height = i * segment_height
-                        if current_height <= 1:
-                            # while current value is within safe operating space 
-                            # set colour to green
-                            colors.append(mcolors.to_rgba('green'))
-                        elif current_height <= 2:
-                            # while current value is in zone of increasing risk
-                            # set a yellow-red colour gradient
-                            gradient_pos = (current_height - 1)# / (height - 1)
-                            colors.append(gradient_color('yellow', 'red', 100)[int(gradient_pos * 99)])
-                        else:
-                            # while current value is in high risk zone
-                            # set a red-purple colour gradient
-                            gradient_pos = (current_height - 2) / (height - 2)
-                            colors.append(gradient_color('red', 'indigo', 100)[int(gradient_pos * 99)])
-                    
-                    # add segments to plot
-                    for i in range(num_segments):
-                        ax.bar(t, segment_height, width=w, facecolor=colors[i], edgecolor='none', bottom=i * segment_height)
-                    
+                    # zone of increasing risk plotted as a yellow -> red gradient from 1 -> 2
+                    # colour is mapped to the absolute radial position so that 1 is always yellow
+                    # and 2 is always red with intermediate colours between 
+                    if height > 1:
+                        top = min(height, 2)
+                        n_seg = 1000
+                        seg_h = 1 / n_seg              # full zone width is 1 (r: 1 -> 2)
+                        grad = gradient_color('yellow', 'red', n_seg, alpha=seg_alpha)
+                        for i in range(n_seg):
+                            r0 = 1 + i * seg_h         # inner radius of this segment
+                            if r0 >= top:
+                                break
+                            # clip the final segment so the bar stops exactly at `top`
+                            h = min(seg_h, top - r0)
+                            ax.bar(t, h, width=w, facecolor=grad[i],
+                                   edgecolor='none', antialiased=False,
+                                   bottom=r0)
+
+                    # high risk zone plotted as a red -> indigo gradient from 2 -> height
+                    # the top is unconstrained as no upper boundary is defined for the high risk zone
+                    if height > 2:
+                        n_seg = 1000
+                        seg_h = (height - 2) / n_seg
+                        grad = gradient_color('red', 'indigo', n_seg, alpha=seg_alpha)
+                        for i in range(n_seg):
+                            ax.bar(t, seg_h, width=w, facecolor=grad[i],
+                                   edgecolor='none', antialiased=False,
+                                   bottom=2 + i * seg_h)
+
                     if control_var_label:
                         # add control variable labels to plot
-                        # ax.annotate(limit_name, xy = (t+(w/2), 6), ha='center', va='center')
                         control_var_text = re.sub('\\s', '\n', limit_name)
-                        ax.annotate(control_var_text, 
-                                    xy = (t+(w/10), 6), 
-                                    ha='center', va='center', 
+                        ax.annotate(control_var_text,
+                                    xy = (t+(w/10), r_labels),
+                                    ha='center', va='center',
                                     fontsize='xx-small', fontstyle='italic')
                     
                 # if height == None:
@@ -211,30 +225,33 @@ class PlanetarySystem:
             if none == 0 :
                 pb.name = pb.name + '\n(not yet quantified)'
 
-        # safe operating space
         # add circle at r = 1 to indicate safe operating space
         theta_circle = np.linspace(0, 2 * np.pi, 100)
         r_circle = np.full_like(theta_circle, 1)
-        ax.plot(theta_circle, r_circle, color='green', linewidth=0.5, linestyle='--') 
+        ax.plot(theta_circle, r_circle, color='green', linewidth=0.5, linestyle='--', zorder=10) 
         
-        # zone of increasing risk
-        ## add circle at r = 2 to indicate zone of increasing risk
+        # add circle at r = 2 to indicate zone of increasing risk
         theta_circle = np.linspace(0, 2 * np.pi, 100)
         r_circle = np.full_like(theta_circle, 2)
-        ax.plot(theta_circle, r_circle, color='red', linewidth=0.5, linestyle='--') 
-
+        ax.plot(theta_circle, r_circle, color='red', linewidth=0.5, linestyle='--', zorder=10)
 
         # format the grid
         ax.grid(True, linewidth=0)
         angles = np.degrees(theta)
         ax.set_thetagrids(angles)
-        
+
+        # fixed radial extent so the rim is predictable
+        # necessary to allow spaced plotting of the boundary and control variable labels
+        # control-variable label ring at r_labels scaled by `resize`
+        ax.set_ylim(0, (r_labels + 0.5) * resize)
+
         if label:
             ax.set_xticklabels(self.names(), fontweight='bold', fontsize='x-small')
+            # push the planetary boundary labels outside the rim so they do not 
+            # collide with the control variable labels
+            ax.tick_params(axis='x', pad=20)
         else:
             ax.set_xticklabels([])
-        
-        # ax.set_ylim(top=max(m.floor(H)+1,2)*resize+1)
 
         # add boundary separation lines
         theta2 = list(np.linspace(np.pi/n_pb, 2 * np.pi + np.pi/n_pb, n_pb, endpoint=False))

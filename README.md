@@ -8,7 +8,7 @@ The aim of this code is to plot Earth's planetary boundaries following the <a hr
 # Code description
 
 The code comprises:
-- planetary_boundary_classes.py which defines the classes
+- planetary_boundary_classes.py which defines the classes used
 - pbs_2023.py which plots the 2023 planetary boundaries
 - pbs_2025.py which plots the 2025 planetary boundaries
 - pbs_PTME.py which plots the biosphere integrity boundary for the Permo-Triassic Mass Extinction

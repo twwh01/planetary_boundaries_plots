@@ -9,6 +9,7 @@ from os import path
 dir_data = path.join('data')
 dir_plots = path.join('plots')
 save_plot = True
+fig_name = 'pbs_2025'
 
 #%% load datasets
 indata = pd.read_excel(path.join(dir_data, 'planetary_boundaries_data.xlsx'), sheet_name='2025')
@@ -177,5 +178,5 @@ pbs_2025 = PlanetarySystem(
 ax = pbs_2025.plot(label=True, control_var_label=True)
 plt.title('PBS 2025', loc='left', fontweight='bold')
 # plt.show()
-plt.savefig(path.join(dir_plots, 'pbs_2025.png'), dpi=600, bbox_inches='tight')
-plt.savefig(path.join(dir_plots, 'pbs_2025.pdf'), bbox_inches='tight')
+plt.savefig(path.join(dir_plots, fig_name+'.png'), dpi=600, bbox_inches='tight')
+plt.savefig(path.join(dir_plots, fig_name+'.pdf'), bbox_inches='tight')
